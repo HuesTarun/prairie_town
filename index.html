@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PRAIRIE TOWN: Coterie &amp; Burrow</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app-shell">
+    <!-- Full-Screen Cutaway Canvas -->
+    <canvas id="game-canvas" aria-label="Prairie Town cutaway world"></canvas>
+
+    <!-- Top Wooden / Parchment HUD Bar -->
+    <header id="top-hud" class="hud-wood-bar">
+      <div class="hud-left">
+        <button id="btn-rank-badge" class="hud-rank-pill" title="View Colony Rank &amp; Progression">
+          <span id="hud-rank-icon" class="rank-icon">🕳️</span>
+          <div class="rank-text">
+            <span id="hud-rank-title" class="rank-title">Single Hole</span>
+            <span id="hud-day-time" class="rank-sub">Day 1 · Morning</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="hud-resources" aria-label="Colony Resources">
+        <div class="res-pill" title="Food Stores (Seeds &amp; Dry Grass) — build Granaries to expand storage">
+          <span class="res-ico">🌾</span>
+          <div class="res-meta">
+            <span class="res-label">Food</span>
+            <span id="hud-food" class="res-val">28 / 50</span>
+          </div>
+        </div>
+
+        <div class="res-pill" title="Packed Dirt — excavated from tunnels to build Crater &amp; Dome Mounds">
+          <span class="res-ico">🪨</span>
+          <div class="res-meta">
+            <span class="res-label">Dirt</span>
+            <span id="hud-dirt" class="res-val">18</span>
+          </div>
+        </div>
+
+        <div id="pill-airflow" class="res-pill" title="Fresh Airflow % — Connect a Crater Mound + Dome Mound for Bernoulli ventilation!">
+          <span class="res-ico">💨</span>
+          <div class="res-meta">
+            <span class="res-label">Airflow</span>
+            <span id="hud-airflow" class="res-val">42%</span>
+          </div>
+          <span id="hud-bernoulli-tag" class="mini-tag hidden">Bernoulli</span>
+        </div>
+
+        <div class="res-pill" title="Colony Hygiene % — Build a Latrine, assign Gardeners & trim tick-heavy tall grass">
+          <span class="res-ico">✨</span>
+          <div class="res-meta">
+            <span class="res-label">Hygiene</span>
+            <span id="hud-hygiene" class="res-val">88%</span>
+          </div>
+        </div>
+
+        <div id="pill-sightline" class="res-pill" title="Perimeter Grass &amp; Sightlines — Tall grass hides Coyote ambushes &amp; drains Hygiene!">
+          <span class="res-ico">👁️</span>
+          <div class="res-meta">
+            <span class="res-label">Grass Risk</span>
+            <span id="hud-grass-risk" class="res-val">High</span>
+          </div>
+        </div>
+
+        <div id="pill-morale" class="res-pill" title="Colony Morale % — Driven by Food, Bernoulli Airflow, Hygiene &amp; Alarm defense">
+          <span class="res-ico">💛</span>
+          <div class="res-meta">
+            <span class="res-label">Morale</span>
+            <span id="hud-morale" class="res-val">86%</span>
+          </div>
+        </div>
+
+        <button id="btn-roster" class="res-pill clickable" title="Population (Adults / Pups) — Click to view Coterie Roster">
+          <span class="res-ico">🐾</span>
+          <div class="res-meta">
+            <span class="res-label">Coterie</span>
+            <span id="hud-pop" class="res-val">4A / 1P</span>
+          </div>
+        </button>
+
+        <div class="res-pill weather-pill" title="Current Weather, Wind &amp; Upcoming Forecast">
+          <span id="hud-weather-ico" class="res-ico">☀️</span>
+          <div class="res-meta">
+            <span id="hud-weather-label" class="res-label">Warm Breeze</span>
+            <span id="hud-weather-forecast" class="res-val">Next: 🌤️</span>
+          </div>
+        </div>
+
+        <div id="megatown-scale-pill" class="res-pill megatown-pill hidden" title="1900 Texas Mega-Town Scale">
+          <span class="res-ico">👑</span>
+          <div class="res-meta">
+            <span class="res-label">Texas Scale</span>
+            <span id="hud-megatown-pop" class="res-val">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-right">
+        <div class="speed-group" role="group" aria-label="Simulation Speed">
+          <button id="btn-speed-0" class="speed-btn" data-speed="0" title="Pause (Space)">⏸</button>
+          <button id="btn-speed-1" class="speed-btn active" data-speed="1" title="Normal Speed">1x</button>
+          <button id="btn-speed-2" class="speed-btn" data-speed="2" title="Fast Speed">2x</button>
+        </div>
+
+        <button id="btn-whistle" class="hud-icon-btn whistle-btn" title="Recall Whistle: Dive surface dogs underground (B)">
+          <span>📣</span>
+        </button>
+
+        <button id="btn-skills" class="hud-icon-btn skills-btn" title="Skills, Achievements &amp; Final Autonomous Goal (U)">
+          <span>🏆</span>
+          <span id="hud-sp-badge" class="sp-badge hidden">0</span>
+        </button>
+
+        <button id="btn-manual" class="hud-icon-btn" title="Opening Guide &amp; User Manual (H / ?)">
+          <span>📘</span>
+        </button>
+
+        <button id="btn-almanac" class="hud-icon-btn" title="Prairie Almanac (Science Field Guide)">
+          <span>📖</span>
+          <span id="almanac-badge" class="notif-dot hidden"></span>
+        </button>
+
+        <button id="btn-settings" class="hud-icon-btn settings-btn" title="Settings &amp; Save Data (Esc)">
+          <span>⚙️</span>
+        </button>
+
+        <div id="player-count-pill" class="players-badge" title="Total Players Played (Global Static Site Counter)">
+          <span>👥</span>
+          <span id="hud-players-count">—</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Compact 90m Valley Minimap (Click or drag to pan across colonies) -->
+    <div id="minimap-wrap" class="minimap-wrap" title="90m Valley Radar — Click or drag to jump camera across your coteries">
+      <canvas id="minimap-canvas" width="360" height="28" aria-label="90m Prairie Valley Minimap"></canvas>
+    </div>
+
+    <!-- Guided First Day Card (Advances when you act or click Next — never rushes you!) -->
+    <aside id="tutorial-card" class="parchment-panel tutorial-card">
+      <div class="tutorial-header">
+        <span class="tutorial-badge">Day 1 Guide</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btn-next-tutorial" class="text-link-btn" style="font-weight:700;color:#6c3c16">Next →</button>
+          <button id="btn-skip-tutorial" class="text-link-btn">Skip Guide</button>
+        </div>
+      </div>
+      <h3 id="tutorial-title">1. Sightlines &amp; Foraging</h3>
+      <p id="tutorial-text">Tall grass hides Coyotes! Select Trim Grass (G) and click tall grass by your mound.</p>
+      <div id="tutorial-hint" class="tutorial-hint">Click tall grass near the mound with Trim Grass tool.</div>
+      <div class="tutorial-dots" id="tutorial-dots">
+        <span class="t-dot active"></span>
+        <span class="t-dot"></span>
+        <span class="t-dot"></span>
+        <span class="t-dot"></span>
+      </div>
+    </aside>
+
+    <!-- Status Toast Container -->
+    <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+    <!-- Clear Pause Indicator (click to resume) -->
+    <button id="pause-banner" class="pause-banner hidden" title="Click or press Space to resume">
+      ⏸ Game Paused — Click or press Space to resume
+    </button>
+
+    <!-- Contextual Inspector Panel (Prairie Dog, Chamber, Mound, or Coterie Roster) -->
+    <aside id="inspector-panel" class="parchment-panel inspector-panel hidden">
+      <div class="inspector-head">
+        <h3 id="inspector-title">Inspector</h3>
+        <button id="btn-close-inspector" class="close-x" aria-label="Close Inspector">&times;</button>
+      </div>
+      <div id="inspector-body" class="inspector-body"></div>
+    </aside>
+
+    <!-- Tactical Semantic Alarm Call Mini-Game Overlay -->
+    <section id="alarm-overlay" class="alarm-overlay hidden" role="dialog" aria-label="Semantic Alarm Call">
+      <div class="alarm-card">
+        <div class="alarm-top">
+          <span class="alarm-siren">📣 SENTRY ALERT!</span>
+          <span id="alarm-spotter" class="alarm-spotter">Pip spotted a threat!</span>
+          <span id="alarm-timer-text" class="alarm-timer-text">5.0s</span>
+        </div>
+        <div class="alarm-clue-row">
+          <span id="alarm-clue-icon" class="alarm-clue-icon">🦅</span>
+          <div>
+            <div id="alarm-clue-title" class="alarm-clue-title">Fast Aerial Shadow</div>
+            <div id="alarm-clue-desc" class="alarm-clue-desc">Match the semantic warning call to trigger an adrenaline dive burst!</div>
+          </div>
+        </div>
+        <div class="alarm-progress-track">
+          <div id="alarm-progress-fill" class="alarm-progress-fill"></div>
+        </div>
+        <div class="alarm-buttons">
+          <button class="alarm-call-btn" data-call="hawk_chirp">
+            <span class="call-key">1</span>
+            <span class="call-wave">⚡</span>
+            <div class="call-info">
+              <strong>High-Pitch Dive Chirp</strong>
+              <small>Fast Hawk</small>
+            </div>
+          </button>
+          <button class="alarm-call-btn" data-call="coyote_bark">
+            <span class="call-key">2</span>
+            <span class="call-wave">〰️</span>
+            <div class="call-info">
+              <strong>Rhythmic Ground Bark</strong>
+              <small>Stalking Coyote</small>
+            </div>
+          </button>
+          <button class="alarm-call-btn" data-call="human_whistle">
+            <span class="call-key">3</span>
+            <span class="call-wave">━</span>
+            <div class="call-info">
+              <strong>Long Low Whistle</strong>
+              <small>Passing Human</small>
+            </div>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mega-Town Ascension / Rank Info Modal -->
+    <div id="rank-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="modal-card parchment-modal">
+        <div class="modal-head">
+          <h2 id="rank-modal-heading">Colony Progression</h2>
+          <button class="close-x modal-close" data-close="rank-modal">&times;</button>
+        </div>
+        <div id="rank-modal-body" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Tool & Coterie Control Dock -->
+    <footer id="bottom-dock" class="bottom-dock">
+      <div class="dock-section tools-strip" role="toolbar" aria-label="Dig &amp; Engineering Tools">
+        <button class="tool-btn active" data-tool="select" title="Inspect &amp; Select (V)">
+          <span class="t-ico">🔍</span><span class="t-lbl">Inspect</span>
+        </button>
+        <button class="tool-btn" data-tool="trim" title="Trim Tall Grass for Sightlines (G)">
+          <span class="t-ico">✂️</span><span class="t-lbl">Trim</span>
+        </button>
+        <button class="tool-btn" data-tool="tunnel" title="Carve Underground Tunnel (T)">
+          <span class="t-ico">⛏️</span><span class="t-lbl">Tunnel</span>
+        </button>
+        <div class="dock-divider"></div>
+        <button class="tool-btn" data-tool="crater" title="Crater Mound: 10 Dirt · Flood barrier + Bernoulli exhaust (C)">
+          <span class="t-ico">🌋</span><span class="t-lbl">Crater</span>
+        </button>
+        <button class="tool-btn" data-tool="dome" title="Dome Mound: 6 Dirt · Bernoulli fresh air intake (D)">
+          <span class="t-ico">⛰️</span><span class="t-lbl">Dome</span>
+        </button>
+        <div class="dock-divider"></div>
+        <button class="tool-btn" data-tool="listening" title="Listening Chamber: 2 Dirt · Entrance safety alcove (L)">
+          <span class="t-ico">👂</span><span class="t-lbl">Listen</span>
+        </button>
+        <button class="tool-btn" data-tool="nursery" title="Nursery: 6 Food · Deep (>1.5m) pup sanctuary (N)">
+          <span class="t-ico">🛏️</span><span class="t-lbl">Nursery</span>
+        </button>
+        <button class="tool-btn" data-tool="latrine" title="Latrine: 2 Dirt · Keeps Hygiene % high (R)">
+          <span class="t-ico">🧹</span><span class="t-lbl">Latrine</span>
+        </button>
+        <button class="tool-btn" data-tool="granary" title="Granary: 3 Dirt · Stores seeds for storms (F)">
+          <span class="t-ico">🌾</span><span class="t-lbl">Granary</span>
+        </button>
+        <div class="dock-divider"></div>
+        <button id="btn-tool-kin" class="tool-btn" data-tool="kin_check" title="Tooth-Touch Kin Check at Neighbor Border (K)">
+          <span class="t-ico">🦷</span><span class="t-lbl">Kin Check</span>
+        </button>
+      </div>
+
+      <div class="dock-right-cluster">
+        <!-- Quick Coterie Role Counters -->
+        <div class="dock-section roles-strip" aria-label="Coterie Roles">
+          <div class="role-chip" data-role="sentry" title="Sentries watch from mounds">
+            <span>👁️</span>
+            <span class="role-name">Sentry</span>
+            <button class="role-adj" data-role="sentry" data-delta="-1" aria-label="Remove Sentry">-</button>
+            <strong id="cnt-sentry">1</strong>
+            <button class="role-adj" data-role="sentry" data-delta="1" aria-label="Add Sentry">+</button>
+          </div>
+          <div class="role-chip" data-role="digger" title="Diggers carve tunnels &amp; build mounds">
+            <span>⛏️</span>
+            <span class="role-name">Digger</span>
+            <button class="role-adj" data-role="digger" data-delta="-1" aria-label="Remove Digger">-</button>
+            <strong id="cnt-digger">1</strong>
+            <button class="role-adj" data-role="digger" data-delta="1" aria-label="Add Digger">+</button>
+          </div>
+          <div class="role-chip" data-role="forager" title="Foragers collect prairie seeds">
+            <span>🌾</span>
+            <span class="role-name">Forager</span>
+            <button class="role-adj" data-role="forager" data-delta="-1" aria-label="Remove Forager">-</button>
+            <strong id="cnt-forager">1</strong>
+            <button class="role-adj" data-role="forager" data-delta="1" aria-label="Add Forager">+</button>
+          </div>
+          <div class="role-chip" data-role="gardener" title="Gardeners trim tall grass &amp; clean chambers">
+            <span>✂️</span>
+            <span class="role-name">Gardener</span>
+            <button class="role-adj" data-role="gardener" data-delta="-1" aria-label="Remove Gardener">-</button>
+            <strong id="cnt-gardener">1</strong>
+            <button class="role-adj" data-role="gardener" data-delta="1" aria-label="Add Gardener">+</button>
+          </div>
+          <span id="cnt-idle-badge" class="idle-badge" title="Unassigned resting adults">Idle: 0</span>
+          <span id="hud-queue-cap" class="queue-badge" title="Active Queued Work Blocks / Max Blueprint Capacity">Blocks: 0/4</span>
+        </div>
+
+        <!-- Camera & Overlay Controls -->
+        <div class="dock-section cam-strip">
+          <button id="btn-toggle-airflow" class="cam-btn active" title="Toggle Bernoulli Airflow Streamlines">💨</button>
+          <button id="btn-zoom-out" class="cam-btn" title="Zoom Out (-)">−</button>
+          <button id="btn-cam-reset" class="cam-btn" title="Center Camera on Colony">⌖</button>
+          <button id="btn-zoom-in" class="cam-btn" title="Zoom In (+)">+</button>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Hover Tooltip on Canvas -->
+    <div id="canvas-tooltip" class="canvas-tooltip hidden"></div>
+
+    <!-- Settings Modal (Pauses Gameplay When Open) -->
+    <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-card parchment-modal settings-modal">
+        <div class="modal-head">
+          <h2 id="settings-title">⚙️ Prairie Town Settings</h2>
+          <button class="close-x modal-close" data-close="settings-modal">&times;</button>
+        </div>
+
+        <div class="modal-body settings-grid">
+          <!-- Audio Settings -->
+          <section class="settings-section">
+            <h3>🔊 Synthesized Audio</h3>
+            <div class="setting-row">
+              <label for="opt-mute">Mute All Audio</label>
+              <label class="switch">
+                <input type="checkbox" id="opt-mute" />
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="setting-row slider-row">
+              <label for="opt-master-vol">Master Volume <span id="lbl-master-vol">80%</span></label>
+              <input type="range" id="opt-master-vol" min="0" max="100" value="80" />
+            </div>
+            <div class="setting-row slider-row">
+              <label for="opt-sfx-vol">Sound Effects (Chirps, Digging) <span id="lbl-sfx-vol">85%</span></label>
+              <input type="range" id="opt-sfx-vol" min="0" max="100" value="85" />
+            </div>
+            <div class="setting-row slider-row">
+              <label for="opt-amb-vol">Nature Ambience (Wind, Rain) <span id="lbl-amb-vol">65%</span></label>
+              <input type="range" id="opt-amb-vol" min="0" max="100" value="65" />
+            </div>
+          </section>
+
+          <!-- Visual & Gameplay Options -->
+          <section class="settings-section">
+            <h3>🌾 Visuals &amp; Pacing</h3>
+            <div class="setting-row">
+              <label for="opt-shake">Screen Shake</label>
+              <label class="switch">
+                <input type="checkbox" id="opt-shake" checked />
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label for="opt-airflow">Airflow Streamline Overlay</label>
+              <label class="switch">
+                <input type="checkbox" id="opt-airflow" checked />
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label for="opt-particles">Particle Density</label>
+              <select id="opt-particles" class="parchment-select">
+                <option value="high">High (Lush Prairie)</option>
+                <option value="low">Low (Performance)</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="opt-pacing">Pacing Mode</label>
+              <select id="opt-pacing" class="parchment-select">
+                <option value="cozy">Cozy Prairie (Relaxed)</option>
+                <option value="wild">Wild Frontier (Tactical)</option>
+              </select>
+            </div>
+          </section>
+
+          <!-- Save Data Controls -->
+          <section class="settings-section save-section">
+            <h3>💾 Colony Save Data</h3>
+            <div class="save-status-row">
+              <span id="save-status-text" class="save-status">Auto-save ready</span>
+              <button id="btn-manual-save" class="wood-btn">Save Now</button>
+            </div>
+
+            <div class="save-code-box">
+              <label for="save-code-area">Export / Import JSON Save Code</label>
+              <textarea id="save-code-area" rows="3" placeholder="Click 'Export Save Code' to generate JSON, or paste a save code here to import..."></textarea>
+              <div class="save-btn-row">
+                <button id="btn-export-save" class="parchment-btn">Copy / Export JSON</button>
+                <button id="btn-import-save" class="parchment-btn">Paste / Import JSON</button>
+              </div>
+              <div id="save-feedback" class="save-feedback"></div>
+            </div>
+
+            <div class="reset-zone">
+              <button id="btn-reset-colony" class="danger-btn">Reset Colony</button>
+              <div id="reset-confirm-box" class="reset-confirm hidden">
+                <span>Start a brand-new colony? Current unsaved progress will be cleared.</span>
+                <button id="btn-reset-confirm" class="danger-btn">Confirm Reset</button>
+                <button id="btn-reset-cancel" class="parchment-btn">Cancel</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prairie Almanac Modal (Pauses Gameplay When Open) -->
+    <div id="almanac-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="almanac-title">
+      <div class="modal-card parchment-modal almanac-modal">
+        <div class="modal-head">
+          <div>
+            <h2 id="almanac-title">📖 Prairie Almanac — Real Science &amp; Field Notes</h2>
+            <p id="almanac-progress" class="modal-sub">0 / 9 Discoveries Unlocked</p>
+          </div>
+          <button class="close-x modal-close" data-close="almanac-modal">&times;</button>
+        </div>
+        <div id="almanac-grid" class="almanac-grid"></div>
+      </div>
+    </div>
+
+    <!-- Opening Welcome, Quick Guide & World Creation Modal -->
+    <div id="welcome-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <div class="modal-card parchment-modal welcome-modal">
+        <div class="modal-head welcome-head">
+          <div>
+            <h2 id="welcome-title">🐾 Welcome to PRAIRIE TOWN: Coterie &amp; Burrow</h2>
+            <p class="modal-sub">Create your valley terrain, outsmart predators &amp; engineer an underground city!</p>
+          </div>
+          <button class="close-x modal-close" data-close="welcome-modal">&times;</button>
+        </div>
+        <div class="modal-body welcome-body">
+          <div class="welcome-pillars">
+            <div class="pillar-card">
+              <div class="pillar-ico">✂️🌾</div>
+              <h4>1. Cut Tall Grass &amp; Harvest Blooms</h4>
+              <p>Overgrown grass hides <strong>Coyote Ambushes</strong> (-4s alert!) &amp; breeds ticks (-Hygiene). Trim grass around mounds for early warning + bonus Food, and click glowing <strong>Golden Blooms</strong>!</p>
+            </div>
+            <div class="pillar-card">
+              <div class="pillar-ico">🌋💨</div>
+              <h4>2. Clay, Roots &amp; Bernoulli Air</h4>
+              <p>Dig toward sparkling <strong>Clay Veins</strong> (+Dirt) &amp; <strong>Sweet Roots</strong> (+Food). Top Exit 1 with a flood-proof <strong>Crater</strong> and Exit 2 with a <strong>Dome</strong> to circulate fresh air. Keep Nurseries below the orange <strong>1.5m</strong> line!</p>
+            </div>
+            <div class="pillar-card">
+              <div class="pillar-ico">📣⏱️</div>
+              <h4>3. First Alert Paused, Next Are Timed!</h4>
+              <p>Only your <strong>very first predator alert</strong> freezes time so you learn keys <strong>1 · 2 · 3</strong>. Future alerts count down live — build fast reflexes &amp; press <strong>B</strong> (📣 Whistle) to recall early!</p>
+            </div>
+          </div>
+
+          <div class="world-gen-panel">
+            <div class="world-gen-head">
+              <h3>🗺️ World Creation — Choose Valley Terrain</h3>
+              <span class="world-seed-hint">Or keep your current starter valley</span>
+            </div>
+            <div class="world-style-grid" id="world-style-grid">
+              <button class="world-style-card active" data-world-style="meadow">
+                <strong>🌾 Golden Meadow</strong>
+                <small>Balanced topsoil, extra Sweet Root Caches (+Food) &amp; calmer breezes.</small>
+              </button>
+              <button class="world-style-card" data-world-style="canyon">
+                <strong>🪨 Redrock Clay Ridge</strong>
+                <small>Packed with Clay Veins (+12 Dirt) &amp; Sandstone Boulders to engineer around.</small>
+              </button>
+              <button class="world-style-card" data-world-style="frontier">
+                <strong>🐺 Coyotebadger Wilds</strong>
+                <small>Thick tall grass danger &amp; bountiful underground treasures — high challenge!</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="welcome-actions">
+            <button id="btn-welcome-reseed" class="parchment-btn">🎲 Generate Selected Valley</button>
+            <button id="btn-welcome-start" class="wood-btn welcome-start-btn">Begin Prairie Town →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills, Achievements & Grand Victory Goal Modal -->
+    <div id="skills-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="skills-title">
+      <div class="modal-card parchment-modal almanac-modal">
+        <div class="modal-head">
+          <div>
+            <h2 id="skills-title">🏆 Skills, Achievements &amp; Grand Prairie Goal</h2>
+            <p id="skills-sp-summary" class="modal-sub">Available Skill Points: 0 SP · Earn SP from Achievements!</p>
+          </div>
+          <button class="close-x modal-close" data-close="skills-modal">&times;</button>
+        </div>
+        <div id="skills-modal-body" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Autonomous Colony Victory Modal -->
+    <div id="victory-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="victory-title">
+      <div class="modal-card parchment-modal welcome-modal">
+        <div class="modal-head">
+          <div>
+            <h2 id="victory-title">👑 GRAND AUTONOMOUS PRAIRIE TOWN ACHIEVED!</h2>
+            <p class="modal-sub">Your 90m valley &amp; 6 Coteries are now united and 100% self-sustaining!</p>
+          </div>
+          <button class="close-x modal-close" data-close="victory-modal">&times;</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+          <div class="pillar-card">
+            <h4>✨ Autonomous Stewardship Active</h4>
+            <p>Congratulations! Your Prairie Town now <strong>runs &amp; defends itself completely on its own</strong> without needing any help:</p>
+            <ul style="margin-top:8px;padding-left:18px;font-size:12.5px;display:flex;flex-direction:column;gap:4px">
+              <li><strong>Autonomous Sentries</strong> automatically sound the exact matching Hawk, Coyote &amp; Human semantic calls — no popups will interrupt you!</li>
+              <li><strong>Balanced Self-Governance:</strong> Maturing pups automatically reinforce Sentries, Foragers &amp; Gardeners to keep Food, Hygiene &amp; Bernoulli airflow thriving endlessly.</li>
+              <li><strong>400M Mega-Town Scale:</strong> Watch your living prairie ecosystem prosper indefinitely as you expand wards!</li>
+            </ul>
+          </div>
+          <div class="welcome-actions">
+            <button id="btn-victory-new" class="parchment-btn">🗺️ Start New Valley</button>
+            <button id="btn-victory-continue" class="wood-btn welcome-start-btn">Watch Autonomous Colony →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simple User Manual Modal (Pauses Gameplay When Open) -->
+    <div id="manual-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="manual-title">
+      <div class="modal-card parchment-modal almanac-modal">
+        <div class="modal-head">
+          <div>
+            <h2 id="manual-title">📘 Prairie Town — Simple User Manual</h2>
+            <p class="modal-sub">Game is paused while you read. Take your time!</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="btn-open-welcome" class="parchment-btn">🗺️ Valley Maker / Intro</button>
+            <button class="close-x modal-close" data-close="manual-modal">&times;</button>
+          </div>
+        </div>
+        <div class="modal-body manual-body">
+          <section class="manual-card">
+            <h3>1. Camera &amp; Basic Controls</h3>
+            <ul>
+              <li><strong>Pan Camera:</strong> Drag anywhere on the screen, use <strong>WASD / Arrow Keys</strong>, or click/drag the <strong>90m Valley Radar Bar</strong> at top center.</li>
+              <li><strong>Zoom:</strong> Mouse wheel, or click <strong>+ / −</strong> in the bottom-right dock. Click <strong>⌖</strong> to recenter.</li>
+              <li><strong>Pause / Speed:</strong> Press <strong>Space</strong> to pause anytime, or click <strong>⏸ / 1x / 2x</strong> at the top-right.</li>
+              <li><strong>Brush &amp; Cancel:</strong> Hold <strong>Shift + Drag</strong> with Tunnel or Trim to paint multiple tiles; <strong>Right-click</strong> any dashed task tile to cancel &amp; refund resources.</li>
+            </ul>
+          </section>
+
+          <section class="manual-card">
+            <h3>2. How to Build Your Colony (5 Easy Steps)</h3>
+            <ol>
+              <li><strong>Trim Tall Grass (✂️ Trim):</strong> Click tall grass near your hole so your Sentry spots sneaky Coyotes early.</li>
+              <li><strong>Dig Tunnels (⛏️ Tunnel):</strong> Click soil next to your starting tunnel to dig deeper and sideways (+4 Dirt each).</li>
+              <li><strong>Create Bernoulli Fresh Air:</strong> Pack a <strong>🌋 Crater Mound</strong> on your first hole (blocks rain floods!), dig another tunnel up to a second surface exit, and build a <strong>⛰️ Dome Mound</strong>. Air will visibly flow down the Dome and out the Crater!</li>
+              <li><strong>Carve Specialized Chambers:</strong>
+                <ul>
+                  <li><strong>👂 Listen:</strong> Right next to an entrance shaft (dogs pause to listen for danger before exiting).</li>
+                  <li><strong>🌾 Granary:</strong> Underground room to store extra Food for storms.</li>
+                  <li><strong>🧹 Latrine:</strong> Side room to keep Colony Hygiene % high.</li>
+                  <li><strong>🛏️ Nursery:</strong> Dig <strong>below the orange 1.5m Coyote Dig Limit line</strong> so pups grow safely!</li>
+                </ul>
+              </li>
+              <li><strong>Expand via Tooth-Touch (🦷 Kin Check):</strong> Dig sideways until you touch a glowing dashed Neighbor Border, then click <strong>Kin Check</strong> (or click the border with Inspect) to welcome neighbor prairie dogs!</li>
+            </ol>
+          </section>
+
+          <section class="manual-card">
+            <h3>3. Predator Alarms (1st Paused, Then Timed!)</h3>
+            <p>Your <strong>first alert pauses</strong> so you can read calmly. After that, every alert runs on a <strong>live timer</strong>! Match keys <strong>1</strong>, <strong>2</strong>, or <strong>3</strong>:</p>
+            <ul>
+              <li><strong>1 · High-Pitch Dive Chirp:</strong> Fast soaring 🦅 <strong>Hawk</strong></li>
+              <li><strong>2 · Rhythmic Ground Bark:</strong> Stalking 🐺 <strong>Coyote</strong> (Short grass gives +3s; Tall grass = Ambush!)</li>
+              <li><strong>3 · Long Low Whistle:</strong> Tall striding 🥾 <strong>Human</strong></li>
+            </ul>
+          </section>
+
+          <section class="manual-card">
+            <h3>4. Coterie Roles (Bottom-Right Bar)</h3>
+            <ul>
+              <li><strong>👁️ Sentry:</strong> Stands atop mounds to scan sightlines and spot predators early.</li>
+              <li><strong>⛏️ Digger:</strong> Excavates queued tunnels/rooms and builds Crater &amp; Dome mounds.</li>
+              <li><strong>🌾 Forager:</strong> Gathers prairie seeds &amp; dry grass on sunny days to refill Food.</li>
+              <li><strong>✂️ Gardener:</strong> Automatically trims grass near entrances and keeps rooms tidy.</li>
+            </ul>
+          </section>
+
+          <section class="manual-card">
+            <h3>5. Quick Shortcuts</h3>
+            <div class="shortcut-grid">
+              <span><b>Space</b> Pause / Play</span>
+              <span><b>V / Esc</b> Inspect Tool</span>
+              <span><b>G</b> Trim Grass</span>
+              <span><b>T</b> Carve Tunnel</span>
+              <span><b>C</b> Crater Mound</span>
+              <span><b>D</b> Dome Mound</span>
+              <span><b>L</b> Listening Room</span>
+              <span><b>N</b> Nursery (&gt;1.5m)</span>
+              <span><b>R</b> Latrine</span>
+              <span><b>F</b> Granary</span>
+              <span><b>K</b> Kin Check</span>
+              <span><b>B</b> Recall Whistle</span>
+              <span><b>U</b> Skills &amp; Goal</span>
+              <span><b>H / ?</b> Open Manual</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Modules (ordered cleanly so file:// and http:// both work with zero build tools) -->
+  <script defer src="js/constants.js"></script>
+  <script defer src="js/audio.js"></script>
+  <script defer src="js/world.js"></script>
+  <script defer src="js/entities.js"></script>
+  <script defer src="js/renderer.js"></script>
+  <script defer src="js/ui.js"></script>
+  <script defer src="js/game.js"></script>
+</body>
+</html>
