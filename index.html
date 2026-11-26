@@ -25,7 +25,7 @@
       </div>
 
       <div class="hud-resources" aria-label="Colony Resources">
-        <div class="res-pill" title="Food Stores (Seeds &amp; Dry Grass) — build Granaries to expand storage">
+        <div id="pill-food" class="res-pill" title="Food Stores (Seeds &amp; Dry Grass) — build Granaries to expand storage">
           <span class="res-ico">🌾</span>
           <div class="res-meta">
             <span class="res-label">Food</span>
@@ -50,7 +50,7 @@
           <span id="hud-bernoulli-tag" class="mini-tag hidden">Bernoulli</span>
         </div>
 
-        <div class="res-pill" title="Colony Hygiene % — Build a Latrine, assign Gardeners & trim tick-heavy tall grass">
+        <div id="pill-hygiene" class="res-pill" title="Colony Hygiene % — Build a Latrine, assign Gardeners &amp; trim tick-heavy tall grass">
           <span class="res-ico">✨</span>
           <div class="res-meta">
             <span class="res-label">Hygiene</span>
@@ -82,7 +82,7 @@
           </div>
         </button>
 
-        <div class="res-pill weather-pill" title="Current Weather, Wind &amp; Upcoming Forecast">
+        <div id="pill-weather" class="res-pill weather-pill" title="Current Weather, Wind &amp; Upcoming Forecast">
           <span id="hud-weather-ico" class="res-ico">☀️</span>
           <div class="res-meta">
             <span id="hud-weather-label" class="res-label">Warm Breeze</span>
@@ -379,10 +379,10 @@
               </select>
             </div>
             <div class="setting-row">
-              <label for="opt-pacing">Pacing Mode</label>
+              <label for="opt-pacing">Challenge Mode</label>
               <select id="opt-pacing" class="parchment-select">
-                <option value="cozy">Cozy Prairie (Relaxed)</option>
-                <option value="wild">Wild Frontier (Tactical)</option>
+                <option value="cozy">Balanced Prairie (Challenging)</option>
+                <option value="wild">Hardcore Frontier (Deadly Stakes)</option>
               </select>
             </div>
           </section>
@@ -463,8 +463,11 @@
 
           <div class="world-gen-panel">
             <div class="world-gen-head">
-              <h3>🗺️ World Creation — Choose Valley Terrain</h3>
-              <span class="world-seed-hint">Or keep your current starter valley</span>
+              <h3>🗺️ World Creation &amp; Challenge Level</h3>
+              <div class="pacing-toggle-row" role="group" aria-label="Challenge Mode">
+                <button class="pacing-choice-btn active" data-pacing="cozy">⚖️ Balanced Prairie</button>
+                <button class="pacing-choice-btn" data-pacing="wild">🔥 Hardcore Frontier</button>
+              </div>
             </div>
             <div class="world-style-grid" id="world-style-grid">
               <button class="world-style-card active" data-world-style="meadow">

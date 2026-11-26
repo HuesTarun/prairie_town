@@ -543,7 +543,8 @@
           const isTarget = cell.row === row && cell.col === col && tool !== PT.TOOLS.TUNNEL;
           const cellSpec = isTarget ? spec : tunnelSpec;
           const mod = this.cellMod[cell.row]?.[cell.col] || PT.CELL_MOD.NONE;
-          const workReq = mod === PT.CELL_MOD.ROCK ? cellSpec.workRequired * 2.1 : cellSpec.workRequired;
+          const depthMult = cell.row >= 9 ? 1.25 : 1.0;
+          const workReq = (mod === PT.CELL_MOD.ROCK ? cellSpec.workRequired * 2.1 : cellSpec.workRequired) * depthMult;
           this.tasks.push({
             id: this.nextTaskId++,
             kind: 'dig',
@@ -568,7 +569,8 @@
       resources.food -= spec.costFood;
 
       const mod = this.cellMod[row]?.[col] || PT.CELL_MOD.NONE;
-      const workReq = mod === PT.CELL_MOD.ROCK ? spec.workRequired * 2.1 : spec.workRequired;
+      const depthMult = row >= 9 ? 1.25 : 1.0;
+      const workReq = (mod === PT.CELL_MOD.ROCK ? spec.workRequired * 2.1 : spec.workRequired) * depthMult;
       this.tasks.push({
         id: this.nextTaskId++,
         kind: 'dig',
@@ -711,9 +713,9 @@
     }
 
     // Coyote ambush damage on shallow (< 1.5m) unreinforced cells when alarm is missed/wrong
-    applyCoyoteShallowDamage(aroundCol) {
+    applyCoyoteShallowDamage(aroundCol, maxCollapse = 2) {
       let collapsed = 0;
-      for (let dc = -3; dc <= 3 && collapsed < 1; dc++) {
+      for (let dc = -4; dc <= 4 && collapsed < maxCollapse; dc++) {
         const c = aroundCol + dc;
         if (!this.isUnlocked(c)) continue;
         // Rows 1 and 2 are above the 1.5m Coyote Dig Limit! Never destroy row 0's sole exit shaft or row >= 3.
@@ -1086,16 +1088,18 @@
     // Updates grass growth and storm flooding
     stepEnvironment(dt, weather, windSpeed) {
       const isStorm = weather.id === 'STORM';
+      const isDrought = weather.id === 'DROUGHT';
 
-      // Grass regrowth (slower when dry, lush after/during rain)
-      const growthRate = (isStorm ? 0.0085 : 0.0032) * dt;
+      // Grass regrowth (slower when parched, lush during/after rain)
+      const growthRate = (isStorm ? 0.0095 : (isDrought ? 0.0022 : 0.0042)) * dt;
+      const seedRate = (isDrought ? 0.006 : 0.015) * dt;
       for (let c = 0; c < this.totalCols; c++) {
         const g = this.grass[c];
         if (!this.isEntrance(c) && g.height < 1.05) {
           g.height = Math.min(1.05, g.height + growthRate);
         }
         if (g.seedAmount < 1.0) {
-          g.seedAmount = Math.min(1.0, g.seedAmount + dt * 0.015);
+          g.seedAmount = Math.min(1.0, g.seedAmount + seedRate);
         }
       }
 
@@ -1105,22 +1109,28 @@
           if (!this.isEntrance(c)) continue;
           const m = this.mounds[c].type;
           if (m === PT.MOUND.RAW) {
-            // Raw unprotected holes let rainwater pour down the shaft!
+            // Raw unprotected holes let rainwater pour down the shaft and spill nearby!
             for (let r = 0; r <= 3; r++) {
               if (this.grid[r][c] !== PT.CELL.SOLID) {
-                this.water[r][c] = Math.min(0.9, this.water[r][c] + dt * 0.09);
+                this.water[r][c] = Math.min(0.95, this.water[r][c] + dt * 0.13);
+              }
+            }
+            for (const dc of [-1, 1]) {
+              const nc = c + dc;
+              if (this.isUnlocked(nc) && this.grid[2][nc] !== PT.CELL.SOLID && this.water[2][c] > 0.45) {
+                this.water[2][nc] = Math.min(0.65, this.water[2][nc] + dt * 0.045);
               }
             }
           } else if (m === PT.MOUND.DOME) {
-            // Low Dome gets tiny dampness at lip during severe storms
-            this.water[0][c] = Math.min(0.22, this.water[0][c] + dt * 0.02);
+            // Low Dome gets mild dampness at lip during severe storms
+            this.water[0][c] = Math.min(0.28, this.water[0][c] + dt * 0.03);
           }
           // Crater Mound is 100% flood-proof!
         }
       }
 
       // Natural evaporation & drainage (faster with Bernoulli airflow & tapped Aquifer springs!)
-      const drainRate = ((this.bernoulliActive ? 0.075 : 0.03) + Math.min(0.05, this.springCount * 0.015)) * dt;
+      const drainRate = ((this.bernoulliActive ? 0.075 : 0.03) + (isDrought ? 0.03 : 0) + Math.min(0.05, this.springCount * 0.015)) * dt;
       for (let r = 0; r < this.rows; r++) {
         for (let c = this.unlockedMinCol; c <= this.unlockedMaxCol; c++) {
           if (this.water[r][c] > 0) {
@@ -1129,19 +1139,21 @@
         }
       }
 
-      // Golden Seed Blooms countdown & periodic spawning on sunny/trimmed grass
+      // Golden Seed Blooms & Rare Prairie Clovers countdown & spawning
       for (let i = this.blooms.length - 1; i >= 0; i--) {
         this.blooms[i].ttl -= dt;
         if (this.blooms[i].ttl <= 0) this.blooms.splice(i, 1);
       }
-      if (!isStorm && this.blooms.length < 3 && Math.random() < dt * 0.055) {
+      if (!isStorm && this.blooms.length < 3 && Math.random() < dt * (isDrought ? 0.035 : 0.06)) {
         const c = this.unlockedMinCol + 2 + Math.floor(Math.random() * (this.unlockedMaxCol - this.unlockedMinCol - 4));
         if (!this.isEntrance(c) && !this.blooms.some((b) => Math.abs(b.col - c) <= 3)) {
+          const isRare = this.grass[c].height > 0.48 || Math.random() < 0.24;
           this.blooms.push({
             id: this.nextBloomId++,
             col: c,
-            food: 7 + Math.floor(Math.random() * 5),
-            ttl: 45
+            isRare,
+            food: isRare ? (14 + Math.floor(Math.random() * 4)) : (8 + Math.floor(Math.random() * 5)),
+            ttl: isRare ? 36 : 45
           });
         }
       }
@@ -1151,6 +1163,18 @@
       for (let r = 0; r < this.rows; r++) {
         for (let c = this.unlockedMinCol; c <= this.unlockedMaxCol; c++) {
           if (this.water[r][c] > 0.25) return true;
+        }
+      }
+      return false;
+    }
+
+    hasFloodedVitalRoom() {
+      for (let r = 0; r < this.rows; r++) {
+        for (let c = this.unlockedMinCol; c <= this.unlockedMaxCol; c++) {
+          const ct = this.grid[r][c];
+          if ((ct === PT.CELL.GRANARY || ct === PT.CELL.NURSERY) && this.water[r][c] > 0.28) {
+            return true;
+          }
         }
       }
       return false;

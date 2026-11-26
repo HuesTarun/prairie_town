@@ -194,6 +194,7 @@
   PT.WEATHER = {
     SUNNY: { id: 'SUNNY', label: 'Warm Breeze', icon: '☀️', windBase: 0.72, rain: 0, skyTint: 0 },
     GOLDEN: { id: 'GOLDEN', label: 'Golden Calm', icon: '🌤️', windBase: 0.45, rain: 0, skyTint: 0.15 },
+    DROUGHT: { id: 'DROUGHT', label: 'Dry Heatwave', icon: '🥵', windBase: 0.30, rain: 0, skyTint: 0, heatTint: 0.45 },
     CLOUDY: { id: 'CLOUDY', label: 'Gathering Clouds', icon: '⛅', windBase: 0.95, rain: 0, skyTint: 0.45 },
     STORM: { id: 'STORM', label: 'Prairie Storm', icon: '⛈️', windBase: 1.35, rain: 1.0, skyTint: 0.85 }
   };
@@ -269,24 +270,24 @@
   PT.PACING = {
     cozy: {
       id: 'cozy',
-      label: 'Cozy Prairie',
-      predatorInterval: [42, 64],
-      alarmWindowSec: 9.0,
-      foodDrainPerDog: 0.028,
-      airDecayMult: 0.75,
-      hygieneDecayMult: 0.85,
-      stormFreqMult: 0.75,
+      label: 'Balanced Prairie',
+      predatorInterval: [28, 44],
+      alarmWindowSec: 6.8,
+      foodDrainPerDog: 0.044,
+      airDecayMult: 1.0,
+      hygieneDecayMult: 1.05,
+      stormFreqMult: 1.1,
       fatalRisk: false
     },
     wild: {
       id: 'wild',
-      label: 'Wild Frontier',
-      predatorInterval: [26, 42],
-      alarmWindowSec: 6.2,
-      foodDrainPerDog: 0.048,
-      airDecayMult: 1.15,
-      hygieneDecayMult: 1.15,
-      stormFreqMult: 1.3,
+      label: 'Hardcore Frontier',
+      predatorInterval: [18, 30],
+      alarmWindowSec: 5.0,
+      foodDrainPerDog: 0.068,
+      airDecayMult: 1.3,
+      hygieneDecayMult: 1.3,
+      stormFreqMult: 1.45,
       fatalRisk: true
     }
   };
@@ -373,6 +374,7 @@
     { id: 'vital_rooms', title: 'Town Planner', icon: '🏘️', sp: 2, desc: 'Operate a Listening Chamber, Latrine & Granary simultaneously.' },
     { id: 'owl_ally', title: 'Fledged Lookout', icon: '🦉', sp: 2, desc: 'Attract a Burrowing Owl ally with clean lawns & fresh air.' },
     { id: 'alarm_ace', title: 'Semantic Virtuoso', icon: '📣', sp: 2, desc: 'Answer 3 predator warning alerts accurately.' },
+    { id: 'alarm_streak_5', title: 'Prairie Watchmaster', icon: '🔥', sp: 2, desc: 'Build a 5x accurate Predator Alarm Streak in one colony.' },
     { id: 'kin_merge_1', title: 'Tooth-Touch Diplomats', icon: '🦷', sp: 2, desc: 'Welcome your first neighboring Coterie.' },
     { id: 'kin_merge_3', title: 'Regional Network', icon: '🤝', sp: 3, desc: 'Unite 3 neighboring Coteries across the prairie.' },
     { id: 'valley_unifier', title: 'Grand Valley Unifier', icon: '🗺️', sp: 4, desc: 'Merge all 6 Neighbor Coteries across the 90m valley.' },

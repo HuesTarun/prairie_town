@@ -294,11 +294,12 @@
       if (this.sprintBoostTimer > 0) this.sprintBoostTimer -= dt;
       if (this.shockTimer > 0) this.shockTimer -= dt;
 
-      // Pup growth toward adulthood (boosted by deep Nursery!)
+      // Pup growth toward adulthood (boosted by deep Nursery, slowed if Nursery flooded!)
       if (this.isPup) {
         const nurseryBonus = world.chamberCounts.nursery > 0 ? 1.55 : 0.85;
         const hygieneMult = 0.65 + (hygienePct / 100) * 0.55;
-        this.ageProgress += dt * 0.011 * nurseryBonus * hygieneMult;
+        const floodFactor = world.hasFloodedVitalRoom() ? 0.55 : 1.0;
+        this.ageProgress += dt * 0.011 * nurseryBonus * hygieneMult * floodFactor;
         if (this.ageProgress >= 1) {
           this.isPup = false;
           this.role = PT.ROLES.IDLE;
@@ -428,9 +429,11 @@
         const cIdx = Math.max(0, Math.min(world.totalCols - 1, Math.round(this.col)));
         if (this.row >= 0 && world.water[rIdx][cIdx] > 0.2) speed *= 0.58;
 
-        // Airflow efficiency multiplier underground
-        if (airflowPct < 45) speed *= 0.78;
-        else if (world.bernoulliActive && airflowPct >= 75) speed *= 1.15;
+        // Airflow & Morale efficiency multiplier underground
+        const moraleVal = ctx.moralePct ?? 80;
+        if (airflowPct < 45 || hygienePct < 45 || moraleVal < 40 || resources.food <= 0.5) speed *= 0.78;
+        else if (world.bernoulliActive && airflowPct >= 75 && moraleVal >= 85) speed *= 1.18;
+        else if (world.bernoulliActive && airflowPct >= 75) speed *= 1.12;
 
         if (Math.abs(dx) > 0.02) this.facing = dx >= 0 ? 1 : -1;
         this.hopPhase += dt * speed * 3.8;
@@ -510,7 +513,10 @@
           return;
         }
         const airSpeed = airflowPct < 45 ? 0.65 : (world.bernoulliActive ? 1.25 : 1.0);
-        const roleMult = (this.role === PT.ROLES.DIGGER ? 1.35 : 0.7) * (ctx.workSpeedMult || 1.0);
+        const moraleMult = (hygienePct < 45 || (ctx.moralePct ?? 80) < 40 || resources.food <= 0.5)
+          ? 0.75
+          : ((ctx.moralePct ?? 80) >= 85 && world.bernoulliActive ? 1.15 : 1.0);
+        const roleMult = (this.role === PT.ROLES.DIGGER ? 1.35 : 0.7) * (ctx.workSpeedMult || 1.0) * moraleMult;
         task.workDone += dt * airSpeed * roleMult;
         this.workTimer += dt;
         this.tailFlickTimer = 0.2;
@@ -581,20 +587,23 @@
         const c = Math.max(world.unlockedMinCol, Math.min(world.unlockedMaxCol, Math.round(this.col)));
         if (this.workTimer >= 1.2) {
           const g = world.grass[c];
+          const seedFactor = 0.45 + (g ? g.seedAmount : 0.7) * 0.8;
           if (g) g.seedAmount = Math.max(0.15, g.seedAmount - 0.35);
-          // Harvest Golden Seed Bloom if standing near one!
-          let carryAmt = 6.5;
+          // Harvest Golden Seed Bloom / Rare Prairie Clover if standing near one!
+          let carryAmt = 5.5 * seedFactor;
+          let pickedRare = false;
           const bIdx = world.blooms.findIndex((b) => Math.abs(b.col - c) <= 1);
           if (bIdx !== -1) {
             carryAmt += world.blooms[bIdx].food;
-            particles.spawnHearts(c, -0.3, 5);
+            pickedRare = !!world.blooms[bIdx].isRare;
+            particles.spawnHearts(c, -0.3, pickedRare ? 7 : 5);
             world.blooms.splice(bIdx, 1);
-            this.actionLabel = 'Returning Golden Bloom harvest!';
+            this.actionLabel = pickedRare ? 'Returning Rare Clover harvest!' : 'Returning Golden Bloom harvest!';
           } else {
             this.actionLabel = 'Carrying seeds to Granary';
           }
           this.carryingFood = carryAmt;
-          this.carryingGrass = true;
+          this.carryingGrass = pickedRare;
           this.state = 'returning_food';
           const granaries = world.getChambersOfType(PT.CELL.GRANARY);
           const dest = granaries.length > 0 ? granaries[0] : world.findNearestSafeCell(0, c, false);
@@ -611,10 +620,11 @@
       if (this.state === 'returning_food') {
         if (this.carryingFood > 0) {
           resources.food = Math.min(ctx.foodCap, resources.food + this.carryingFood);
+          const wasRare = this.carryingGrass;
           this.carryingFood = 0;
           this.carryingGrass = false;
           this.tailFlickTimer = 0.5;
-          ctx.onFoodDeposited();
+          ctx.onFoodDeposited(wasRare);
         }
         this.state = 'idle';
         this.pauseCheckTimer = 0;
@@ -942,7 +952,7 @@
 
   // ==================== PREDATOR ENTITY ====================
   class Predator {
-    constructor(type, world, targetCol) {
+    constructor(type, world, targetCol, speedMult = 1) {
       this.id = Math.floor(Math.random() * 1e9);
       this.type = type; // 'HAWK' | 'COYOTE' | 'HUMAN'
       this.spec = PT.PREDATORS[type];
@@ -951,9 +961,26 @@
       const minC = world.unlockedMinCol;
       const maxC = world.unlockedMaxCol;
       const entrances = world.getEntrances();
-      // Target the outer opening on the approaching side unless explicitly supplied!
+      // Coyotes prefer hunting the grassiest / most unguarded entrance; others target approaching side!
       if (targetCol !== undefined && targetCol !== null) {
         this.targetCol = targetCol;
+      } else if (type === 'COYOTE' && entrances.length > 1 && Math.random() < 0.72) {
+        let bestScore = -1;
+        let chosen = entrances[0];
+        for (const ec of entrances) {
+          let grassSum = 0;
+          for (let dc = -3; dc <= 3; dc++) {
+            const g = world.grass[ec + dc];
+            if (g) grassSum += g.height;
+          }
+          const rawPen = world.mounds[ec]?.type === PT.MOUND.RAW ? 1.5 : 0;
+          if (grassSum + rawPen > bestScore) {
+            bestScore = grassSum + rawPen;
+            chosen = ec;
+          }
+        }
+        this.targetCol = chosen;
+        this.dir = chosen < (minC + maxC) / 2 ? 1 : -1;
       } else if (entrances.length > 0) {
         this.targetCol = this.dir === 1 ? entrances[0] : entrances[entrances.length - 1];
       } else {
@@ -963,16 +990,16 @@
       if (type === 'HAWK') {
         this.xCol = this.dir === 1 ? minC - 11 : maxC + 11;
         this.yMeters = -4.8; // high in the sky
-        this.speed = 6.2;
+        this.speed = 6.2 * speedMult;
       } else if (type === 'COYOTE') {
         this.xCol = this.dir === 1 ? minC - 9 : maxC + 9;
         this.yMeters = 0;
-        this.speed = 2.9;
+        this.speed = 2.95 * speedMult;
       } else {
         // HUMAN
         this.xCol = this.dir === 1 ? minC - 10 : maxC + 10;
         this.yMeters = 0;
-        this.speed = 2.25;
+        this.speed = 2.3 * speedMult;
       }
 
       this.state = 'approaching'; // approaching -> swooping/stalking -> passing -> leaving

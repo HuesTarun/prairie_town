@@ -206,12 +206,18 @@
         horCol = this._lerpColor('#f7b259', '#cf896b', t);
       }
 
-      // Storm blend
+      // Storm & Heatwave blend
       const stormTint = weather.skyTint || 0;
       if (stormTint > 0) {
         topCol = this._lerpColor(topCol, '#485461', stormTint * 0.78);
         midCol = this._lerpColor(midCol, '#697782', stormTint * 0.78);
         horCol = this._lerpColor(horCol, '#8c969c', stormTint * 0.72);
+      }
+      const heatTint = weather.heatTint || 0;
+      if (heatTint > 0) {
+        topCol = this._lerpColor(topCol, '#cf7d36', heatTint * 0.55);
+        midCol = this._lerpColor(midCol, '#e8ae54', heatTint * 0.62);
+        horCol = this._lerpColor(horCol, '#f5d487', heatTint * 0.58);
       }
 
       const horizonY = (0 - this.cam.y) * this.cam.zoom + this.height * 0.44;
@@ -845,19 +851,21 @@
           for (const bl of world.blooms) {
             const bx = (bl.col + 0.5) * cs;
             const pulse = 0.78 + Math.sin(timeSec * 4.5 + bl.id) * 0.22;
-            ctx.fillStyle = `rgba(255, 228, 92, ${0.26 * pulse})`;
+            ctx.fillStyle = bl.isRare
+              ? `rgba(218, 128, 255, ${0.32 * pulse})`
+              : `rgba(255, 228, 92, ${0.26 * pulse})`;
             ctx.beginPath();
-            ctx.arc(bx, -14, 16 * pulse, 0, Math.PI * 2);
+            ctx.arc(bx, -14, (bl.isRare ? 19 : 16) * pulse, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.fillStyle = '#ffe066';
+            ctx.fillStyle = bl.isRare ? '#f4a2ff' : '#ffe066';
             for (let p = 0; p < 5; p++) {
               const ang = (p / 5) * Math.PI * 2 + timeSec * 0.6;
               ctx.beginPath();
-              ctx.arc(bx + Math.cos(ang) * 5, -14 + Math.sin(ang) * 5, 3.2, 0, Math.PI * 2);
+              ctx.arc(bx + Math.cos(ang) * 5, -14 + Math.sin(ang) * 5, bl.isRare ? 3.8 : 3.2, 0, Math.PI * 2);
               ctx.fill();
             }
-            ctx.fillStyle = '#c4751f';
+            ctx.fillStyle = bl.isRare ? '#9c36b5' : '#c4751f';
             ctx.beginPath();
             ctx.arc(bx, -14, 2.6, 0, Math.PI * 2);
             ctx.fill();

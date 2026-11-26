@@ -75,6 +75,8 @@
 
       // Self-Sustaining Final Goal (Autonomous Victory Mode)
       this.autonomousVictory = false;
+      this.famineTimer = 0;
+      this.nextPredatorIsRelay = false;
 
       // Guided First Day & Opening Guide popup
       this.welcomeShown = false;
@@ -364,6 +366,7 @@
         dogs: this.dogs,
         alarmActive: !!this.activeAlarm,
         hygienePct: this.hygienePct,
+        moralePct: this.moralePct,
         airflowPct: this.world.airflowPct,
         weather: this.weather,
         pacing: PT.PACING[this.settings.pacingMode],
@@ -413,7 +416,12 @@
           this.hygienePct = Math.min(100, this.hygienePct + 2.5);
           this.moralePct = Math.min(100, this.moralePct + 1);
         },
-        onFoodDeposited: () => {},
+        onFoodDeposited: (isRare) => {
+          if (isRare) {
+            this.moralePct = Math.min(100, this.moralePct + 4);
+            if (this.ui) this.ui.showToast('Rare Prairie Clover stored! (+4% Morale)', 'good');
+          }
+        },
         onPupMature: (dog) => {
           if (this.autonomousVictory) {
             // Balance new adult into whichever role the autonomous colony needs!
@@ -477,30 +485,49 @@
       const pacing = PT.PACING[this.settings.pacingMode];
       const pop = this.dogs.length;
       const drainMult = this.getDrainReductionMult();
+      const isDrought = this.weather.id === 'DROUGHT';
+      const floodedVital = this.world.hasFloodedVitalRoom();
 
-      // Food consumption & starvation pressure
-      this.resources.food = Math.max(0, Math.min(this.getFoodCap(), this.resources.food - pop * pacing.foodDrainPerDog * drainMult * dt));
+      // Food consumption, flood spoilage & starvation pressure
+      const floodSpoil = floodedVital ? 0.55 : 0;
+      this.resources.food = Math.max(0, Math.min(this.getFoodCap(), this.resources.food - (pop * pacing.foodDrainPerDog * drainMult + floodSpoil) * dt));
 
-      // Hygiene % balance: Latrines, Gardeners, Mineral Springs & Owl vs Population, Flooding & Ticks from Untrimmed Tall Grass!
+      // Hygiene % balance: Latrines, Gardeners, Mineral Springs & Owl vs Population, Heatwave, Flooding & Ticks!
       const latrineBonus = this.world.chamberCounts.latrine * 1.55;
       const gardenerCount = this.dogs.filter((d) => d.role === PT.ROLES.GARDENER).length;
       const owlBonus = this.world.owlCol !== null ? 0.6 : 0;
-      const springBonus = (this.world.springCount || 0) * 0.38;
-      const floodPenalty = this.world.hasActiveFlooding() ? 2.0 : 0;
-      const grassTickPenalty = this.world.tallGrassRisk > 45 ? ((this.world.tallGrassRisk - 40) * 0.022) : 0;
-      const stalePenalty = this.world.airflowPct < 45 ? 0.4 : 0;
-      const hygieneDelta = (latrineBonus + gardenerCount * 0.72 + owlBonus + springBonus - pop * 0.14 * pacing.hygieneDecayMult * drainMult - floodPenalty - grassTickPenalty - stalePenalty) * dt;
+      const springBonus = (this.world.springCount || 0) * (isDrought ? 0.55 : 0.38);
+      const floodPenalty = (this.world.hasActiveFlooding() ? 2.0 : 0) + (floodedVital ? 0.75 : 0);
+      const droughtPenalty = isDrought ? 0.55 : 0;
+      const grassTickPenalty = this.world.tallGrassRisk > 45 ? ((this.world.tallGrassRisk - 40) * 0.025) : 0;
+      const stalePenalty = this.world.airflowPct < 45 ? 0.45 : 0;
+      const hygieneDelta = (latrineBonus + gardenerCount * 0.72 + owlBonus + springBonus - pop * 0.14 * pacing.hygieneDecayMult * drainMult - floodPenalty - droughtPenalty - grassTickPenalty - stalePenalty) * dt;
       this.hygienePct = Math.max(15, Math.min(100, this.hygienePct + hygieneDelta));
 
-      // Colony Morale dynamics (food, fresh air, hygiene & clear lawns matter!)
-      const starvePenalty = this.resources.food <= 0.5 ? 2.5 : 0;
-      const goodConditions = (this.world.airflowPct >= 65 ? 0.45 : -0.25) + (this.hygienePct >= 70 ? 0.45 : -0.35) + (this.world.sightlineClear ? 0.25 : 0);
-      this.moralePct = Math.max(15, Math.min(100, this.moralePct + (goodConditions - starvePenalty) * dt));
+      // Colony Morale & Famine dynamics
+      const starvePenalty = this.resources.food <= 0.5 ? 3.2 : 0;
+      const heatPenalty = isDrought && this.world.airflowPct < 70 ? 0.25 : 0;
+      const goodConditions = (this.world.airflowPct >= 65 ? 0.45 : -0.28) + (this.hygienePct >= 70 ? 0.45 : -0.35) + (this.world.sightlineClear ? 0.25 : 0);
+      this.moralePct = Math.max(15, Math.min(100, this.moralePct + (goodConditions - starvePenalty - heatPenalty) * dt));
+
+      if (this.resources.food <= 0.5) {
+        this.famineTimer += dt;
+        if (pacing.fatalRisk && !this.autonomousVictory && this.famineTimer >= 16 && this.dogs.length > 4) {
+          this.famineTimer = 0;
+          const idx = this.dogs.findIndex((d) => !d.isPup && d.role !== PT.ROLES.SENTRY);
+          if (idx !== -1) {
+            const [departed] = this.dogs.splice(idx, 1);
+            if (this.ui) this.ui.showToast(`Famine! ${departed.name} wandered off seeking food!`, 'warn');
+          }
+        }
+      } else {
+        this.famineTimer = Math.max(0, this.famineTimer - dt * 2);
+      }
 
       // Pup Births when Nursery exists & Food/Hygiene/Airflow/Morale are healthy!
       const nurseries = this.world.getChambersOfType(PT.CELL.NURSERY);
       const popCap = 8 + nurseries.length * 4 + this.world.neighbors.filter((n) => n.merged).length * 4;
-      if (nurseries.length > 0 && pop < popCap && this.resources.food >= 14 && this.hygienePct >= 55 && this.world.airflowPct >= 50 && this.moralePct >= 50) {
+      if (nurseries.length > 0 && !floodedVital && pop < popCap && this.resources.food >= 14 && this.hygienePct >= 55 && this.world.airflowPct >= 50 && this.moralePct >= 50) {
         const birthChance = dt * 0.032 * nurseries.length;
         if (Math.random() < birthChance) {
           const nCell = nurseries[Math.floor(Math.random() * nurseries.length)];
@@ -527,19 +554,23 @@
     _advanceWeather() {
       const pacing = PT.PACING[this.settings.pacingMode];
       this.weather = this.nextWeather;
-      const pool = [PT.WEATHER.SUNNY, PT.WEATHER.GOLDEN, PT.WEATHER.CLOUDY, PT.WEATHER.STORM];
-      // Higher storm probability after Cloudy
-      if (this.weather.id === 'CLOUDY' && Math.random() < 0.55 * pacing.stormFreqMult) {
+      const pool = [PT.WEATHER.SUNNY, PT.WEATHER.GOLDEN, PT.WEATHER.DROUGHT, PT.WEATHER.CLOUDY];
+      // Higher storm probability after Cloudy, Heatwaves after Sunny/Golden
+      if (this.weather.id === 'CLOUDY' && Math.random() < 0.6 * pacing.stormFreqMult) {
         this.nextWeather = PT.WEATHER.STORM;
       } else if (this.weather.id === 'STORM') {
         this.nextWeather = PT.WEATHER.SUNNY;
+      } else if (this.weather.id === 'DROUGHT') {
+        this.nextWeather = Math.random() < 0.65 ? PT.WEATHER.CLOUDY : PT.WEATHER.GOLDEN;
       } else {
-        this.nextWeather = pool[Math.floor(Math.random() * 3)];
+        this.nextWeather = pool[Math.floor(Math.random() * pool.length)];
       }
-      this.weatherTimer = this.weather.id === 'STORM' ? 24 : 34;
+      this.weatherTimer = this.weather.id === 'STORM' ? 25 : (this.weather.id === 'DROUGHT' ? 28 : 32);
       if (this.weather.id === 'STORM' && this.ui) {
-        this.ui.showToast('Prairie Storm rolling in! Crater Mounds block flooding.', 'warn');
+        this.ui.showToast('Prairie Storm rolling in! Crater Mounds protect Granaries from flooding.', 'warn');
         if (this.settings.screenShake && this.renderer) this.renderer.triggerShake(4, 0.3);
+      } else if (this.weather.id === 'DROUGHT' && this.ui) {
+        this.ui.showToast('Dry Heatwave! Wind drops — Bernoulli Airflow & Mineral Springs keep town cool.', 'warn');
       }
     }
 
@@ -591,15 +622,20 @@
         this.predatorCooldown -= dt;
         if (this.predatorCooldown <= 0) {
           const [minI, maxI] = pacing.predatorInterval;
-          this.predatorCooldown = minI + Math.random() * (maxI - minI);
+          const rankTighten = 1 - Math.min(0.28, this.colonyRank * 0.07 + Math.max(0, this.day - 2) * 0.015);
+          this.predatorCooldown = Math.max(12, (minI + Math.random() * (maxI - minI)) * rankTighten);
 
           const types = ['HAWK', 'COYOTE', 'HUMAN'];
-          // Gentle first guided predator is Hawk or Coyote
+          // Gentle first guided predator is Hawk
           const type = this.day === 1 && this.successfulAlarms === 0
             ? 'HAWK'
             : types[Math.floor(Math.random() * types.length)];
 
-          const pred = new PT.Predator(type, this.world, null);
+          const speedMult = 1 + Math.min(0.32, this.colonyRank * 0.08 + Math.max(0, this.day - 2) * 0.025) +
+            (this.settings.pacingMode === 'wild' ? 0.08 : 0);
+          const pred = new PT.Predator(type, this.world, null, speedMult);
+          pred.isRelay = !!this.nextPredatorIsRelay;
+          this.nextPredatorIsRelay = false;
           this.predators.push(pred);
         }
       }
@@ -615,10 +651,10 @@
           const isPausedAlert = isFirstPause;
 
           let windowSec = pacing.alarmWindowSec;
-          if (p.isAmbush) windowSec -= 3.8;
-          else if (p.earlySpotted) windowSec += 3.2;
-          if (this.world.owlCol !== null) windowSec += 2.2;
-          windowSec = Math.max(3.8, Number(windowSec.toFixed(1)));
+          if (p.isAmbush) windowSec -= 3.4;
+          else if (p.earlySpotted) windowSec += 2.6;
+          if (this.world.owlCol !== null) windowSec += 1.8;
+          windowSec = Math.max(3.4, Number(windowSec.toFixed(1)));
 
           this.activeAlarm = {
             predator: p,
@@ -642,6 +678,13 @@
         if (p.done) {
           if (this.activeAlarm && this.activeAlarm.predator.id === p.id) {
             this.resolveAlarm(null);
+          }
+          // Double-Threat Relay Wave chance on Rank >= 1 or Hardcore Frontier
+          const relayChance = this.settings.pacingMode === 'wild' ? 0.38 : (this.colonyRank >= 1 ? 0.24 : 0);
+          if (!p.isRelay && !this.autonomousVictory && relayChance > 0 && Math.random() < relayChance) {
+            this.predatorCooldown = Math.min(this.predatorCooldown, 6.0);
+            this.nextPredatorIsRelay = true;
+            if (this.ui) this.ui.showToast('⚠️ Another predator spotted across the ridge!', 'warn');
           }
           this.predators.splice(i, 1);
         }
@@ -672,6 +715,9 @@
       if (success) {
         this.successfulAlarms += 1;
         this.alarmStreak += 1;
+        if (this.alarmStreak >= 5) {
+          this.unlockAchievement('alarm_streak_5');
+        }
         this.unlockAlmanac('semantic_calls');
         for (const d of this.dogs) {
           if (d.row < 0.8) d.triggerDive(true);
@@ -680,18 +726,21 @@
         this.audio.playDive();
         this.hygienePct = Math.min(100, this.hygienePct + 2);
         this.moralePct = Math.min(100, this.moralePct + 5);
-        const fastBonus = (!isPausedAlert && timeLeft >= timeMax * 0.45) || this.alarmStreak >= 2;
-        if (fastBonus) {
-          this.resources.food = Math.min(this.getFoodCap(), this.resources.food + 3);
-          this.resources.dirt += 3;
+        const fastReflex = !isPausedAlert && timeLeft >= timeMax * 0.55;
+        const streakBonus = (fastReflex || this.alarmStreak >= 2) ? Math.min(8, 2 + this.alarmStreak) : 0;
+        if (streakBonus > 0) {
+          this.resources.food = Math.min(this.getFoodCap(), this.resources.food + streakBonus);
+          this.resources.dirt += streakBonus;
         }
         if (this.ui) {
-          const streakNote = this.alarmStreak >= 2 ? ` (${this.alarmStreak}x Streak: +3 Food & Dirt!)` : (fastBonus ? ' (Quick Reflex: +3 Food & Dirt!)' : '');
+          const streakNote = this.alarmStreak >= 2
+            ? ` (${this.alarmStreak}x Streak: +${streakBonus} Food & Dirt!)`
+            : (fastReflex ? ` (⚡ Lightning Call: +${streakBonus} Food & Dirt!)` : '');
           this.ui.showToast(`Perfect ${PT.PREDATORS[predator.type].callName}! Colony dived cleanly!${streakNote}`, 'good');
         }
       } else {
         this.alarmStreak = 0;
-        this.moralePct = Math.max(15, this.moralePct - 12);
+        this.moralePct = Math.max(15, this.moralePct - 15);
         this.audio.playFailAlert();
         if (this.settings.screenShake && this.renderer) {
           this.renderer.triggerShake(7, 0.4);
@@ -700,12 +749,13 @@
           if (d.row < 0.4) d.triggerDive(false);
         }
 
-        // Predator-specific tangible consequences!
-        let lostFood = Math.min(5, Math.floor(this.resources.food));
+        // Predator-specific high-stakes consequences!
+        const pacing = PT.PACING[this.settings.pacingMode];
+        let lostFood = Math.min(6, Math.floor(this.resources.food));
         let extraMsg = '';
         if (predator.type === 'COYOTE') {
-          lostFood = Math.min(8, Math.floor(this.resources.food));
-          const collapsed = this.world.applyCoyoteShallowDamage(Math.round(predator.targetCol));
+          lostFood = Math.min(9, Math.floor(this.resources.food));
+          const collapsed = this.world.applyCoyoteShallowDamage(Math.round(predator.targetCol), 2);
           if (collapsed > 0) {
             for (const d of this.dogs) {
               const s = this.world.sanitizeEntityPosition(d.row, d.col, !d.isPup);
@@ -713,18 +763,32 @@
               d.col = s.col;
             }
             this.world.recomputeStats(this.windSpeed, this.dogs.length);
-            extraMsg = ' & collapsed a shallow tunnel!';
+            extraMsg = ` & collapsed ${collapsed} shallow tunnel${collapsed > 1 ? 's' : ''}!`;
           }
         } else if (predator.type === 'HAWK') {
-          lostFood = Math.min(6, Math.floor(this.resources.food));
+          lostFood = Math.min(8, Math.floor(this.resources.food));
           for (const d of this.dogs) {
-            if (d.row < 0) d.shockTimer = 2.5;
+            if (d.row < 0) d.shockTimer = 4.0;
+          }
+          if (pacing.fatalRisk && this.dogs.length > 4) {
+            const exposedIdx = this.dogs.findIndex((d) =>
+              !d.isPup && d.role !== PT.ROLES.SENTRY && d.row < 0.1 && Math.abs(d.col - predator.targetCol) <= 6
+            );
+            if (exposedIdx !== -1) {
+              const [caught] = this.dogs.splice(exposedIdx, 1);
+              extraMsg = ` & carried off ${caught.name}!`;
+            }
           }
         } else {
           const tc = Math.round(predator.targetCol);
           if (this.world.mounds[tc]?.type === PT.MOUND.RAW) {
-            this.world.water[0][tc] = Math.min(0.6, this.world.water[0][tc] + 0.35);
-            extraMsg = ' & scuffed raw entrance!';
+            this.world.mounds[tc].type = PT.MOUND.NONE;
+            this.world.water[0][tc] = Math.min(0.85, this.world.water[0][tc] + 0.55);
+            this.world.recomputeStats(this.windSpeed, this.dogs.length);
+            extraMsg = ' & stomped raw mound!';
+          } else {
+            this.world.water[0][tc] = Math.min(0.55, this.world.water[0][tc] + 0.25);
+            extraMsg = ' & rattled entrance!';
           }
         }
         this.resources.food = Math.max(0, this.resources.food - lostFood);
@@ -1484,6 +1548,8 @@
       this.trimmedCount = 0;
       this.foundDepositCount = 0;
       this.autonomousVictory = false;
+      this.famineTimer = 0;
+      this.nextPredatorIsRelay = false;
       this.successfulAlarms = 0;
       this.totalAlarmsTriggered = 0;
       this.alarmStreak = 0;

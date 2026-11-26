@@ -16,11 +16,13 @@
         rankTitle: document.getElementById('hud-rank-title'),
         dayTime: document.getElementById('hud-day-time'),
         food: document.getElementById('hud-food'),
+        foodPill: document.getElementById('pill-food'),
         dirt: document.getElementById('hud-dirt'),
         airflow: document.getElementById('hud-airflow'),
         airflowPill: document.getElementById('pill-airflow'),
         bernoulliTag: document.getElementById('hud-bernoulli-tag'),
         hygiene: document.getElementById('hud-hygiene'),
+        hygienePill: document.getElementById('pill-hygiene'),
         grassRisk: document.getElementById('hud-grass-risk'),
         sightlinePill: document.getElementById('pill-sightline'),
         morale: document.getElementById('hud-morale'),
@@ -29,6 +31,7 @@
         weatherIco: document.getElementById('hud-weather-ico'),
         weatherLabel: document.getElementById('hud-weather-label'),
         weatherForecast: document.getElementById('hud-weather-forecast'),
+        weatherPill: document.getElementById('pill-weather'),
         megatownPill: document.getElementById('megatown-scale-pill'),
         megatownPop: document.getElementById('hud-megatown-pop'),
 
@@ -191,6 +194,18 @@
           this._selectedWorldStyle = card.dataset.worldStyle;
           g.audio.ensureContext();
           g.audio.playClick();
+        });
+      });
+      document.querySelectorAll('.pacing-choice-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const mode = btn.dataset.pacing;
+          if (!PT.PACING[mode]) return;
+          g.settings.pacingMode = mode;
+          g.applySettings();
+          this.syncSettingsUI();
+          g.audio.ensureContext();
+          g.audio.playClick();
+          this.showToast(`Challenge: ${PT.PACING[mode].label}`, 'good');
         });
       });
       document.getElementById('btn-welcome-reseed').addEventListener('click', () => {
@@ -514,6 +529,9 @@
       this.els.optParticles.value = s.particleDensity;
       this.els.optPacing.value = s.pacingMode;
       this.els.btnToggleAirflow.classList.toggle('active', s.airflowOverlay);
+      document.querySelectorAll('.pacing-choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.pacing === s.pacingMode);
+      });
     }
 
     updateHUD() {
@@ -529,7 +547,8 @@
         : g.dayProgress < 0.85 ? 'Golden Hour' : 'Dusk';
       this.els.dayTime.textContent = `Day ${g.day} · ${phaseLabel}`;
 
-      this.els.food.textContent = `${Math.floor(g.resources.food)} / ${g.getFoodCap()}`;
+      this.els.food.textContent = g.resources.food <= 0.5 ? `FAMINE! 0 / ${g.getFoodCap()}` : `${Math.floor(g.resources.food)} / ${g.getFoodCap()}`;
+      if (this.els.foodPill) this.els.foodPill.classList.toggle('warn', g.resources.food <= 5);
       this.els.dirt.textContent = `${Math.floor(g.resources.dirt)}`;
 
       this.els.airflow.textContent = `${w.airflowPct}%`;
@@ -538,6 +557,7 @@
       this.els.airflowPill.classList.toggle('good', w.bernoulliActive && w.airflowPct >= 75);
 
       this.els.hygiene.textContent = `${Math.round(g.hygienePct)}%`;
+      if (this.els.hygienePill) this.els.hygienePill.classList.toggle('warn', g.hygienePct < 50);
 
       this.els.grassRisk.textContent = w.tallGrassRisk > 45 ? `Ambush ${w.tallGrassRisk}%` : (w.sightlineClear ? 'Clear 👁️' : `${w.tallGrassRisk}%`);
       this.els.sightlinePill.classList.toggle('warn', w.tallGrassRisk > 45);
@@ -554,6 +574,7 @@
       this.els.weatherIco.textContent = g.weather.icon;
       this.els.weatherLabel.textContent = g.weather.label;
       this.els.weatherForecast.textContent = `Next: ${g.nextWeather.icon} · Wind ${(g.windSpeed * 12).toFixed(0)}mph`;
+      if (this.els.weatherPill) this.els.weatherPill.classList.toggle('warn', g.weather.id === 'STORM' || g.weather.id === 'DROUGHT');
 
       if (g.colonyRank >= 3) {
         this.els.megatownPill.classList.remove('hidden');
@@ -627,7 +648,8 @@
         const a = g.activeAlarm;
         const spec = PT.PREDATORS[a.predator.type];
         const tag = a.isAmbush ? ' · 🌿 TALL GRASS AMBUSH!' : (a.earlySpotted ? ' · 👁️ Early Sightline Bonus!' : '');
-        this.els.alarmSpotter.textContent = `${a.spotterName} spotted a threat${tag}`;
+        const streakTag = g.alarmStreak >= 2 ? ` · 🔥 ${g.alarmStreak}x Streak` : '';
+        this.els.alarmSpotter.textContent = `${a.spotterName} spotted a threat${tag}${streakTag}`;
         this.els.alarmClueIcon.textContent = spec.icon;
         this.els.alarmClueTitle.textContent = `${spec.speedLabel}`;
         this.els.alarmClueDesc.textContent = a.isFirstPause
