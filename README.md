@@ -2,6 +2,8 @@
 
 An interactive browser colony simulation built with zero dependencies (vanilla HTML5 Canvas, CSS3, Web Audio API, and modular JavaScript).
 
+**Play Online:** https://prairie-town.onrender.com/
+
 ## Play Locally
 Open `index.html` directly in Chrome/Edge/Firefox, or serve the root folder with any static HTTP server.
 
